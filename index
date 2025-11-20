@@ -1,0 +1,660 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  ArrowLeft, 
+  Video, 
+  Phone, 
+  MoreVertical, 
+  Smile, 
+  Paperclip, 
+  Camera, 
+  Mic, 
+  Lock, 
+  Settings, 
+  X, 
+  Save,
+  Image as ImageIcon,
+  MessageSquare,
+  Globe,
+  Code,
+  Link as LinkIcon,
+  KeyRound,
+  AlertTriangle,
+  CheckCircle2
+} from 'lucide-react';
+
+// --- KONFIGURASI DEFAULT ---
+const DEFAULT_CONFIG = {
+  appName: "Mami Gita",
+  profilePic: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&h=200&auto=format&fit=crop",
+  favicon: "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg",
+  videoLink: "https://www.youtube.com", 
+  callLink: "https://wa.me/", 
+  autoMessageText: "Halo! Silakan lihat promo terbaru kami di bawah ini ya 👇",
+  bannerAdCode: '<div style="background:#eee; padding:10px; text-align:center; border:1px dashed #999; border-radius:5px;"><p style="margin:0; font-weight:bold; color:#555;">[Slot Iklan Banner]</p><small>Ukuran 300x250</small></div>',
+  
+  // --- CONTOH IKLAN ANCHOR MODERN PUTIH ---
+  anchorAdCode: `
+    <div style="
+      background: #ffffff; 
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.08); 
+      border-top: 1px solid #f0f0f0; 
+      padding: 12px 16px; 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 100%;
+    ">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="
+          width: 42px; 
+          height: 42px; 
+          background: linear-gradient(135deg, #25D366 0%, #128C7E 100%); 
+          border-radius: 10px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        ">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="white"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"></path></svg>
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <span style="font-weight: 700; font-size: 14px; color: #111b21; line-height: 1.2;">Penawaran Spesial</span>
+          <span style="font-size: 12px; color: #54656f;">Diskon 50% hari ini saja!</span>
+        </div>
+      </div>
+      <button style="
+        background-color: #008069; 
+        color: white; 
+        border: none; 
+        padding: 8px 20px; 
+        border-radius: 24px; 
+        font-weight: 600; 
+        font-size: 13px; 
+        cursor: pointer;
+        transition: background 0.2s;
+        box-shadow: 0 2px 5px rgba(0, 128, 105, 0.3);
+      ">
+        Buka
+      </button>
+    </div>
+  `,
+  
+  interstitialAdCode: '', 
+  showInterstitialOnLoad: false
+};
+
+// --- KOMPONEN UTAMA ---
+
+export default function App() {
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false); 
+  const [messages, setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  const [showInterstitial, setShowInterstitial] = useState(false);
+  const [showAgeGate, setShowAgeGate] = useState(true); 
+  
+  const [tapCount, setTapCount] = useState(0);
+  const tapTimeoutRef = useRef(null);
+
+  // --- INITIALIZATION & EFFECTS ---
+
+  useEffect(() => {
+    const savedConfig = localStorage.getItem('wa_pwa_config');
+    if (savedConfig) {
+      setConfig(JSON.parse(savedConfig));
+    }
+    
+    const isAgeVerified = localStorage.getItem('wa_age_verified');
+    if (isAgeVerified === 'true') {
+      setShowAgeGate(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.title = config.appName;
+    
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.getElementsByTagName('head')[0].appendChild(link);
+    }
+    link.href = config.favicon;
+
+    const initMessages = [
+      { 
+        id: 'enc', 
+        type: 'system', 
+        content: 'Pesan dan panggilan terenkripsi secara end-to-end. Hanya orang di chat ini yang bisa membaca, mendengarkan, atau membagikannya. Pelajari selengkapnya.' 
+      },
+      {
+        id: 'auto1',
+        type: 'incoming',
+        text: config.autoMessageText,
+        adCode: config.bannerAdCode,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+    setMessages(initMessages);
+
+    if (!showAgeGate && config.showInterstitialOnLoad && config.interstitialAdCode) {
+      setTimeout(() => setShowInterstitial(true), 1500);
+    }
+
+  }, [config, showAgeGate]);
+
+  const renderHTML = (htmlString) => {
+    return { __html: htmlString };
+  };
+
+  const handleSaveConfig = (newConfig) => {
+    setConfig(newConfig);
+    localStorage.setItem('wa_pwa_config', JSON.stringify(newConfig));
+    setShowAdmin(false);
+    window.location.reload(); 
+  };
+
+  const handleSendMessage = () => {
+    if (!inputValue.trim()) return;
+    const newMessage = {
+      id: Date.now(),
+      type: 'outgoing',
+      text: inputValue,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setMessages(prev => [...prev, newMessage]);
+    setInputValue("");
+  };
+
+  const handleConfirmAge = () => {
+    localStorage.setItem('wa_age_verified', 'true');
+    setShowAgeGate(false);
+  };
+
+  const handleMenuTap = () => {
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current);
+    }
+
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+
+    if (newCount >= 5) {
+      setTapCount(0);
+      setShowAuthModal(true); 
+    } else {
+      tapTimeoutRef.current = setTimeout(() => {
+        setTapCount(0);
+      }, 800);
+    }
+  };
+
+  const openLink = (url) => {
+    if (url && url !== '#') {
+      window.open(url, '_blank');
+    } else {
+      alert("Link belum diatur di Admin Panel");
+    }
+  };
+
+  return (
+    <div className="relative h-screen w-full bg-[#E5DDD5] overflow-hidden font-sans flex flex-col">
+      
+      <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-0 opacity-10" 
+           style={{backgroundImage: "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')", backgroundSize: '400px'}}>
+      </div>
+
+      <header className="bg-[#008069] text-white px-2 py-2 flex items-center justify-between shadow-md z-20 shrink-0">
+        <div className="flex items-center gap-1 cursor-pointer">
+          <ArrowLeft size={24} />
+          <div className="relative ml-1">
+            <img 
+              src={config.profilePic} 
+              alt="Profile" 
+              className="w-9 h-9 rounded-full object-cover border border-white/20"
+            />
+          </div>
+          <div className="ml-2 flex flex-col justify-center">
+            <h1 className="font-semibold text-[17px] leading-tight truncate max-w-[150px] sm:max-w-md">
+              .{config.appName}
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-5 pr-1">
+          <div onClick={() => openLink(config.videoLink)} className="cursor-pointer active:opacity-70" title="Video Call">
+            <Video size={24} />
+          </div>
+          <div onClick={() => openLink(config.callLink)} className="cursor-pointer active:opacity-70" title="Voice Call">
+            <Phone size={22} />
+          </div>
+          <div 
+            onClick={handleMenuTap} 
+            className="cursor-pointer active:opacity-70 select-none p-2 -mr-2 rounded-full active:bg-white/10 transition"
+            title="Menu (Ketuk 5x untuk Admin)"
+          >
+            <MoreVertical size={22} />
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-3 z-10 pb-20 relative scroll-smooth">
+        <div className="flex justify-center mb-4 sticky top-2 z-10">
+          <span className="bg-[#E3F0F4] text-[#57666e] text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm border border-white/50">
+            14 November 2025
+          </span>
+        </div>
+
+        {messages.map((msg) => {
+          if (msg.type === 'system') {
+            return (
+              <div key={msg.id} className="flex justify-center mb-4 px-4">
+                <div className="bg-[#FEF2CA] text-[#5E6C72] text-[12.5px] px-3 py-2 rounded-lg text-center shadow-sm border border-yellow-100 leading-snug max-w-[90%]">
+                  <div className="inline-flex items-baseline justify-center gap-1">
+                    <Lock size={10} className="inline relative top-[1px]" fill="#5E6C72" />
+                    <span>{msg.content}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (msg.type === 'incoming') {
+            return (
+              <div key={msg.id} className="flex flex-col items-start mb-3 max-w-[85%]">
+                <div className="bg-white rounded-tr-lg rounded-br-lg rounded-bl-lg rounded-tl-none p-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative group">
+                  <div className="absolute top-0 -left-[8px]">
+                     <svg viewBox="0 0 8 13" width="8" height="13" className="fill-white"><path opacity=".13" fill="#0000000" d="M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z"></path><path fill="currentColor" d="M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z"></path></svg>
+                  </div>
+                  <div className="px-2 pt-1 pb-1 text-[#111b21] text-[15px] leading-relaxed whitespace-pre-wrap">
+                    {msg.text}
+                  </div>
+                  {msg.adCode && (
+                    <div className="mt-2 mb-1 overflow-hidden rounded-md bg-gray-50 border border-gray-100 flex justify-center items-center min-h-[50px]">
+                      <div dangerouslySetInnerHTML={renderHTML(msg.adCode)} />
+                    </div>
+                  )}
+                  <div className="float-right text-[11px] text-[#667781] mt-1 ml-2 relative top-1">
+                    {msg.time}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (msg.type === 'outgoing') {
+            return (
+              <div key={msg.id} className="flex flex-col items-end mb-2 max-w-[85%] self-end ml-auto">
+                <div className="bg-[#D9FDD3] rounded-tr-none rounded-br-lg rounded-bl-lg rounded-tl-lg p-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative min-w-[100px]">
+                   <div className="absolute top-0 -right-[8px]">
+                     <svg viewBox="0 0 8 13" width="8" height="13" className="fill-[#D9FDD3]"><path opacity=".13" fill="#0000000" d="M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z"></path><path fill="currentColor" d="M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z"></path></svg>
+                  </div>
+                  <div className="px-2 pt-1 pb-1 text-[#111b21] text-[15px] leading-relaxed">
+                    {msg.text}
+                  </div>
+                  <div className="flex justify-end items-center gap-1 mt-1 relative top-1">
+                    <span className="text-[11px] text-[#667781]">{msg.time}</span>
+                    <svg viewBox="0 0 16 15" width="16" height="15" className=""><path fill="#53bdeb" d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-7.655a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-7.655a.365.365 0 0 0-.063-.51z"></path></svg>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })}
+      </main>
+
+      {/* --- FOOTER INPUT (REVISED) --- */}
+      <footer className="bg-[#F0F2F5] px-2 py-2 flex items-center gap-2 z-20 shrink-0 pb-safe">
+        <div className="flex-1 bg-white rounded-[24px] flex items-center px-3 py-[9px] shadow-sm">
+          <Smile className="text-[#8696A0] cursor-pointer hover:text-[#606f78] transition mr-2 shrink-0" size={26} />
+          <input 
+            type="text"
+            placeholder="Ketik pesan"
+            className="flex-1 bg-transparent outline-none text-[#111b21] text-[16px] placeholder:text-[#8696A0] min-w-0"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+          />
+          <div className="flex gap-4 ml-3 shrink-0 items-center">
+            <Paperclip className="text-[#8696A0] rotate-[-45deg] cursor-pointer hover:text-[#606f78]" size={24} />
+            {!inputValue && <Camera className="text-[#8696A0] cursor-pointer hover:text-[#606f78]" size={24} />}
+          </div>
+        </div>
+        <button 
+          className="w-12 h-12 bg-[#008069] rounded-full flex items-center justify-center shadow-md active:scale-95 transition shrink-0"
+          onClick={handleSendMessage}
+        >
+          {inputValue ? (
+            <svg viewBox="0 0 24 24" height="24" width="24" className=""><path fill="white" d="M1.101,21.757L23.8,12.028L1.101,2.3l0.011,7.912l13.623,1.816L1.112,13.845 L1.101,21.757z"></path></svg>
+          ) : (
+            <Mic className="text-white" size={24} />
+          )}
+        </button>
+      </footer>
+
+      {showAgeGate && (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden text-center p-6 relative animate-scale-up">
+            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle size={32} className="text-red-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Konten Dewasa (18+)</h2>
+            <p className="text-gray-600 mb-6 text-sm leading-relaxed">
+              Aplikasi ini berisi konten yang mungkin tidak sesuai untuk pemirsa di bawah umur. Pastikan Anda berusia 18 tahun ke atas untuk melanjutkan.
+            </p>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={handleConfirmAge}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2"
+              >
+                 <CheckCircle2 size={20} /> Saya Berusia 18+
+              </button>
+              <button 
+                onClick={() => window.location.href = 'https://edukasidewasa.xyz'}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-lg transition"
+              >
+                Keluar
+              </button>
+            </div>
+            <div className="mt-4 text-[10px] text-gray-400">
+              Dengan masuk, Anda menyetujui Syarat & Ketentuan kami.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- SLOT IKLAN ANCHOR --- */}
+      {config.anchorAdCode && (
+        <div className="w-full z-50 sticky bottom-0 shadow-2xl">
+           <div dangerouslySetInnerHTML={renderHTML(config.anchorAdCode)} />
+        </div>
+      )}
+
+      {showInterstitial && !showAgeGate && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-lg overflow-hidden relative">
+            <button 
+              onClick={() => setShowInterstitial(false)}
+              className="absolute top-2 right-2 bg-gray-200 hover:bg-gray-300 rounded-full p-1 z-10"
+            >
+              <X size={20} />
+            </button>
+            <div className="p-4 bg-gray-50 text-center border-b">
+              <h3 className="text-sm text-gray-500 uppercase tracking-wider font-bold">Iklan Sponsor</h3>
+            </div>
+            <div className="p-6 flex items-center justify-center min-h-[300px] bg-gray-100">
+              <div dangerouslySetInnerHTML={renderHTML(config.interstitialAdCode)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAuthModal && (
+        <AuthModal 
+          onSuccess={() => {
+            setShowAuthModal(false);
+            setShowAdmin(true);
+          }}
+          onCancel={() => setShowAuthModal(false)}
+        />
+      )}
+
+      {showAdmin && (
+        <AdminPanel 
+          currentConfig={config} 
+          onSave={handleSaveConfig} 
+          onClose={() => setShowAdmin(false)} 
+        />
+      )}
+
+    </div>
+  );
+}
+
+function AuthModal({ onSuccess, onCancel }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (code === "@Masukin4") {
+      onSuccess();
+    } else {
+      setError("Kode akses salah!");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-lg p-6 w-full max-w-xs shadow-2xl animate-slide-up">
+        <div className="flex items-center justify-center mb-4 text-[#008069]">
+          <KeyRound size={32} />
+        </div>
+        <h3 className="text-center text-lg font-bold mb-2">Akses Admin</h3>
+        <p className="text-center text-xs text-gray-500 mb-4">Ketuk 3 titik 5x untuk sampai di sini.<br/>Masukkan kode rahasia:</p>
+        
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input 
+            type="text"
+            value={code}
+            onChange={(e) => {
+              setCode(e.target.value);
+              setError("");
+            }}
+            placeholder="Kode Akses"
+            className="w-full border border-gray-300 rounded-md p-2 text-center text-lg font-mono focus:ring-2 focus:ring-[#008069] outline-none"
+            autoFocus
+          />
+          {error && <p className="text-red-500 text-xs text-center font-bold">{error}</p>}
+          
+          <div className="flex gap-2 mt-2">
+            <button 
+              type="button" 
+              onClick={onCancel}
+              className="flex-1 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-medium text-sm"
+            >
+              Batal
+            </button>
+            <button 
+              type="submit"
+              className="flex-1 py-2 bg-[#008069] text-white rounded hover:bg-[#006c59] font-medium text-sm"
+            >
+              Masuk
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+function AdminPanel({ currentConfig, onSave, onClose }) {
+  const [formData, setFormData] = useState(currentConfig);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center backdrop-blur-sm">
+      <div className="bg-white w-full sm:w-[500px] h-[90%] sm:h-auto sm:max-h-[90%] rounded-t-xl sm:rounded-xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+        
+        <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center shrink-0">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Settings size={20} /> Admin Panel
+          </h2>
+          <button onClick={onClose} className="hover:bg-blue-700 p-1 rounded">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+          
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b pb-1 flex gap-2 items-center">
+              <ImageIcon size={16}/> Profil Aplikasi
+            </h3>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Nama Akun / Header</label>
+              <input 
+                type="text" 
+                name="appName" 
+                value={formData.appName} 
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">URL Foto Profil</label>
+                <input 
+                  type="text" 
+                  name="profilePic" 
+                  value={formData.profilePic} 
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">URL Icon (Favicon)</label>
+                <input 
+                  type="text" 
+                  name="favicon" 
+                  value={formData.favicon} 
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b pb-1 flex gap-2 items-center">
+              <LinkIcon size={16}/> Setting Link (Header)
+            </h3>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Link Icon Video</label>
+              <input 
+                type="text" 
+                name="videoLink" 
+                value={formData.videoLink} 
+                onChange={handleChange}
+                placeholder="https://..."
+                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Link Icon Telepon</label>
+              <input 
+                type="text" 
+                name="callLink" 
+                value={formData.callLink} 
+                onChange={handleChange}
+                placeholder="https://..."
+                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+             <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b pb-1 flex gap-2 items-center">
+              <MessageSquare size={16}/> Pengaturan Chat
+            </h3>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Pesan Otomatis (Welcome Message)</label>
+              <textarea 
+                name="autoMessageText" 
+                rows={3}
+                value={formData.autoMessageText} 
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+             <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wide border-b pb-1 flex gap-2 items-center">
+              <Code size={16}/> Kode Iklan (HTML)
+            </h3>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Iklan Banner (Dalam Bubble Chat)</label>
+              <textarea 
+                name="bannerAdCode" 
+                rows={2}
+                value={formData.bannerAdCode} 
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-md p-2 text-sm font-mono bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Iklan Anchor (Sticky Bawah)</label>
+              <textarea 
+                name="anchorAdCode" 
+                rows={2}
+                value={formData.anchorAdCode} 
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-md p-2 text-sm font-mono bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-medium text-gray-700">Iklan Interstitial (Pop-up)</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    name="showInterstitialOnLoad" 
+                    checked={formData.showInterstitialOnLoad}
+                    onChange={handleChange}
+                    id="interstitialCheck"
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <label htmlFor="interstitialCheck" className="text-xs text-gray-600">Aktifkan saat buka app</label>
+                </div>
+              </div>
+              <textarea 
+                name="interstitialAdCode" 
+                rows={2}
+                value={formData.interstitialAdCode} 
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-md p-2 text-sm font-mono bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+          </div>
+
+        </div>
+
+        <div className="p-4 border-t bg-gray-50 flex justify-end gap-3 shrink-0">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-md text-sm font-medium transition"
+          >
+            Batal
+          </button>
+          <button 
+            onClick={() => onSave(formData)}
+            className="px-6 py-2 bg-[#008069] hover:bg-[#006c59] text-white rounded-md text-sm font-medium flex items-center gap-2 shadow-lg transition transform active:scale-95"
+          >
+            <Save size={18} /> Simpan Perubahan
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+
